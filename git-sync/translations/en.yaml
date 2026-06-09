@@ -17,6 +17,22 @@ configuration:
     description: >-
       Optional path to an existing private key (e.g. /ssl/git_id_rsa) to use
       instead of pasting the key above.
+  ssh_key_type:
+    name: Generated key type
+    description: >-
+      Algorithm used when the app generates its own key (ed25519 recommended).
+      Only used when no key is pasted or provided via a file.
+  ssh_key_comment:
+    name: Generated key name
+    description: >-
+      Comment/name attached to the generated key, shown next to it in your Git
+      host. Useful to identify the deploy key.
+  keep_remote_files:
+    name: Keep remote files
+    description: >-
+      Repo files that live alongside the backup (e.g. README.md, LICENSE,
+      .github) and must never be deleted by the mirror. They are restored from
+      the remote on each commit.
   backup_path:
     name: Backup directory
     description: >-

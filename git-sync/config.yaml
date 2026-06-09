@@ -30,6 +30,13 @@ options:
   branch: main
   ssh_key: []
   ssh_key_path: ""
+  ssh_key_type: ed25519
+  ssh_key_comment: home-assistant-git-sync
+  keep_remote_files:
+    - README.md
+    - LICENSE
+    - LICENSE.md
+    - .github
   backup_path: /homeassistant
   auto_pull: true
   pull_interval: 300
@@ -59,6 +66,10 @@ schema:
   ssh_key:
     - str
   ssh_key_path: str?
+  ssh_key_type: list(ed25519|rsa)
+  ssh_key_comment: str
+  keep_remote_files:
+    - str?
   backup_path: str
   auto_pull: bool
   pull_interval: int(10,)

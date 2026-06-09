@@ -13,8 +13,10 @@ import threading
 
 log = logging.getLogger("git")
 
-SSH_KEY_FILE = "/data/id_rsa"
+SSH_DIR = "/data"
 KNOWN_HOSTS_FILE = "/data/known_hosts"
+PROVIDED_KEY_FILE = "/data/id_provided"   # a key pasted into the options
+MANAGED_KEY_FILE = "/data/id_gitsync"     # a key generated/managed by the app
 GITIGNORE_HEADER = "# === Managed by the Git Sync app — do not edit this block ==="
 GITIGNORE_FOOTER = "# === End of Git Sync managed block ==="
 
@@ -42,6 +44,10 @@ class GitSync:
             "last_error": None,
             "last_commit": "",
             "busy": "",
+            "public_key": "",
+            "key_type": "",
+            "key_source": "",      # provided | file | generated | none
+            "key_fingerprint": "",
         }
 
     # ------------------------------------------------------------------ #
@@ -75,9 +81,20 @@ class GitSync:
     # ------------------------------------------------------------------ #
     # SSH / git configuration
     # ------------------------------------------------------------------ #
+    def prepare_ssh(self):
+        """Set up the SSH key (generating one if needed) so the public key is
+        available in the panel even before the repository is connected."""
+        with self.lock:
+            self._setup_ssh()
+
     def _setup_ssh(self):
-        os.makedirs(os.path.dirname(KNOWN_HOSTS_FILE), exist_ok=True)
+        os.makedirs(SSH_DIR, exist_ok=True)
+        # Ensure the known_hosts file exists so ssh does not complain.
+        open(KNOWN_HOSTS_FILE, "a", encoding="utf-8").close()
+
         key_path = None
+        source = "none"
+
         key_lines = self.cfg.ssh_key
         if isinstance(key_lines, str):
             key_lines = key_lines.splitlines()
@@ -85,19 +102,28 @@ class GitSync:
 
         if any(line.strip() for line in key_lines):
             data = "\n".join(line.rstrip() for line in key_lines).strip() + "\n"
-            with open(SSH_KEY_FILE, "w", encoding="utf-8") as handle:
+            with open(PROVIDED_KEY_FILE, "w", encoding="utf-8") as handle:
                 handle.write(data)
-            os.chmod(SSH_KEY_FILE, 0o600)
-            key_path = SSH_KEY_FILE
+            os.chmod(PROVIDED_KEY_FILE, 0o600)
+            key_path, source = PROVIDED_KEY_FILE, "provided"
         elif self.cfg.ssh_key_path and os.path.exists(self.cfg.ssh_key_path):
-            key_path = self.cfg.ssh_key_path
+            key_path, source = self.cfg.ssh_key_path, "file"
             try:
                 os.chmod(key_path, 0o600)
             except OSError:
                 pass
-
-        # Ensure the known_hosts file exists so ssh does not complain.
-        open(KNOWN_HOSTS_FILE, "a", encoding="utf-8").close()
+        elif os.path.exists(MANAGED_KEY_FILE):
+            key_path, source = MANAGED_KEY_FILE, "generated"
+        else:
+            # Nothing supplied: generate a managed key so there is a public key
+            # to copy into the Git host as a deploy key.
+            self._generate_keypair(
+                MANAGED_KEY_FILE,
+                self.cfg.ssh_key_type,
+                self.cfg.ssh_key_comment,
+            )
+            key_path, source = MANAGED_KEY_FILE, "generated"
+            log.info("No SSH key supplied — generated a managed key")
 
         opts = [
             "-o", "StrictHostKeyChecking=accept-new",
@@ -106,12 +132,82 @@ class GitSync:
         ]
         if key_path:
             opts = ["-i", key_path] + opts
-            log.info("SSH key configured (%s)", key_path)
-        else:
-            log.warning(
-                "No SSH key provided; only HTTPS or an existing ssh-agent will work"
-            )
         os.environ["GIT_SSH_COMMAND"] = "ssh " + " ".join(shlex.quote(o) for o in opts)
+
+        self.state["key_source"] = source
+        self.state["public_key"] = self._public_key(key_path) if key_path else ""
+        ktype, fp = self._key_meta(key_path) if key_path else ("", "")
+        self.state["key_type"] = ktype
+        self.state["key_fingerprint"] = fp
+        if key_path:
+            log.info("Using SSH key %s (source: %s)", key_path, source)
+        else:
+            log.warning("No SSH key available; only HTTPS remotes will work")
+
+    def _generate_keypair(self, path, key_type, comment):
+        key_type = (key_type or "ed25519").strip().lower()
+        if key_type not in ("ed25519", "rsa"):
+            key_type = "ed25519"
+        comment = (comment or "home-assistant-git-sync").strip()
+        for stale in (path, path + ".pub"):
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
+        cmd = ["ssh-keygen", "-t", key_type, "-C", comment, "-N", "", "-f", path]
+        if key_type == "rsa":
+            cmd = ["ssh-keygen", "-t", "rsa", "-b", "4096",
+                   "-C", comment, "-N", "", "-f", path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "ssh-keygen failed: %s" % (result.stderr.strip() or result.stdout.strip())
+            )
+        os.chmod(path, 0o600)
+        log.info("Generated %s SSH key (%s)", key_type, path)
+
+    def _public_key(self, key_path):
+        pub = key_path + ".pub"
+        try:
+            if os.path.exists(pub):
+                with open(pub, "r", encoding="utf-8") as handle:
+                    return handle.read().strip()
+        except OSError:
+            pass
+        result = subprocess.run(
+            ["ssh-keygen", "-y", "-f", key_path], capture_output=True, text=True
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    def _key_meta(self, key_path):
+        target = key_path + ".pub" if os.path.exists(key_path + ".pub") else key_path
+        result = subprocess.run(
+            ["ssh-keygen", "-l", "-f", target], capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            return ("", "")
+        line = result.stdout.strip()      # e.g. "256 SHA256:abc comment (ED25519)"
+        tokens = line.split()
+        fingerprint = tokens[1] if len(tokens) >= 2 else ""
+        ktype = line[line.rfind("(") + 1:-1] if line.endswith(")") and "(" in line else ""
+        return (ktype, fingerprint)
+
+    def generate_key(self, key_type=None, comment=None):
+        """(Re)generate the managed SSH key and switch to it. Returns the
+        public key so it can be copied into the Git host."""
+        with self.lock:
+            self._generate_keypair(
+                MANAGED_KEY_FILE,
+                key_type or self.cfg.ssh_key_type,
+                comment or self.cfg.ssh_key_comment,
+            )
+            self._setup_ssh()
+            if self.state["key_source"] != "generated":
+                log.warning(
+                    "A key is configured via options/ssh_key_path, so the "
+                    "generated key will not be used until that is removed"
+                )
+            return self.state["public_key"]
 
     def _config_repo(self):
         # Mark every directory as safe — the config dir may be owned by a
@@ -180,12 +276,55 @@ class GitSync:
     # ------------------------------------------------------------------ #
     # Status helpers
     # ------------------------------------------------------------------ #
-    def _local_changes(self, ignore_gitignore=False):
+    def _is_protected(self, path):
+        for pattern in (self.cfg.keep_remote_files or []):
+            pattern = (pattern or "").strip().rstrip("/")
+            if not pattern:
+                continue
+            if path == pattern or path.startswith(pattern + "/"):
+                return True
+        return False
+
+    def _local_changes(self, ignore_gitignore=False, ignore_protected=False):
         porcelain = self._git("status", "--porcelain", check=False).stdout
-        rows = [line for line in porcelain.splitlines() if line.strip()]
-        if ignore_gitignore:
-            rows = [r for r in rows if r[3:].strip() != ".gitignore"]
+        rows = []
+        for line in porcelain.splitlines():
+            if not line.strip():
+                continue
+            path = line[3:].strip()
+            if ignore_gitignore and path == ".gitignore":
+                continue
+            if ignore_protected and self._is_protected(path):
+                continue
+            rows.append(line)
         return rows
+
+    def _remote_has_backup(self):
+        """True if the remote branch already holds real backup content (i.e.
+        files other than the protected repo-meta files and .gitignore)."""
+        result = self._git(
+            "ls-tree", "-r", "--name-only",
+            "origin/%s" % self.cfg.branch, check=False,
+        )
+        if result.returncode != 0:
+            return False
+        for name in result.stdout.splitlines():
+            name = name.strip()
+            if not name or name == ".gitignore" or self._is_protected(name):
+                continue
+            return True
+        return False
+
+    def _preserve_files(self):
+        """Restore protected repo-meta files (README, LICENSE, .github, …) from
+        the last commit so the mirror does not delete them on the next push."""
+        patterns = [p.strip() for p in (self.cfg.keep_remote_files or []) if p and p.strip()]
+        if not patterns:
+            return
+        if self._git("rev-parse", "--verify", "HEAD", check=False).returncode != 0:
+            return  # no commit yet, nothing to restore
+        for pattern in patterns:
+            self._git("checkout", "HEAD", "--", pattern, check=False)
 
     def _refresh(self, fetch=False):
         if fetch and self.cfg.repository_url:
@@ -252,7 +391,12 @@ class GitSync:
                 self._git("reset", "--mixed", "origin/%s" % self.cfg.branch)
                 log.info("Linked working tree to existing remote branch '%s'",
                          self.cfg.branch)
-                if self._local_changes(ignore_gitignore=True):
+                # Only guard against overwriting a *real* existing backup. A
+                # fresh repo that only holds README/LICENSE is safe to adopt.
+                diverged = self._local_changes(
+                    ignore_gitignore=True, ignore_protected=True
+                )
+                if self._remote_has_backup() and diverged:
                     self._pause(
                         "Local configuration differs from the existing remote "
                         "backup. Open the Git Sync panel and choose 'Restore from "
@@ -270,11 +414,23 @@ class GitSync:
             log.info("Repository ready (branch '%s', remote '%s')",
                      self.cfg.branch, self.cfg.repository_url)
 
+    def connect(self):
+        """Attempt to initialise/connect the repository, surfacing any error to
+        the panel instead of crashing (e.g. before the deploy key is added)."""
+        try:
+            self.ensure_repo()
+        except Exception as err:  # noqa: BLE001
+            self.state["last_error"] = str(err)
+            log.error("Connect failed: %s", err)
+            return False
+        return True
+
     # ------------------------------------------------------------------ #
     # Operations
     # ------------------------------------------------------------------ #
     def _commit(self, message=None):
         """Stage everything and commit. Returns True if a commit was created."""
+        self._preserve_files()
         self._git("add", "-A")
         if not self._local_changes():
             return False

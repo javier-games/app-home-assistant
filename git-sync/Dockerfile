@@ -11,6 +11,7 @@ ENV LANG=C.UTF-8 \
 RUN apk add --no-cache \
     git \
     openssh-client \
+    openssh-keygen \
     inotify-tools \
     python3 \
     tzdata

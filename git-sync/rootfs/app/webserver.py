@@ -85,6 +85,36 @@ PAGE = """<!DOCTYPE html>
   </div>
 
   <div class="card">
+    <h2>SSH deploy key</h2>
+    <p style="font-size:13px;opacity:.75;margin:0 0 8px">
+      Add this <b>public</b> key to your repository as a deploy key with
+      <b>write access</b> (GitHub: Settings &rarr; Deploy keys &rarr; Add).
+      The private key never leaves this app.
+    </p>
+    <div class="grid" style="margin-bottom:10px">
+      <div class="k">Type</div><div id="k_type">&mdash;</div>
+      <div class="k">Fingerprint</div><div id="k_fp" style="word-break:break-all">&mdash;</div>
+      <div class="k">Source</div><div id="k_src">&mdash;</div>
+    </div>
+    <textarea id="k_pub" readonly rows="3" style="width:100%;box-sizing:border-box;
+      font-family:ui-monospace,Menlo,monospace;font-size:12px;border-radius:8px;
+      padding:8px"></textarea>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <button class="secondary" onclick="copyKey()">&#128203; Copy public key</button>
+      <button onclick="connectRepo()">&#128279; Connect / retry</button>
+    </div>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <select id="k_newtype" style="padding:8px;border-radius:8px">
+        <option value="ed25519">ed25519 (recommended)</option>
+        <option value="rsa">rsa (4096)</option>
+      </select>
+      <input id="k_newname" placeholder="key name / comment"
+        style="padding:8px;border-radius:8px;border:1px solid #ccc;flex:1;min-width:160px">
+      <button class="danger" onclick="genKey()">&#9851; Regenerate key</button>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Manual actions</h2>
     <div class="row">
       <button id="b_pull" onclick="act('pull')">&#11015; Pull now</button>
@@ -132,10 +162,39 @@ async function refresh(){
       document.getElementById('resolveText').textContent = s.pause_reason; }
     else rv.style.display='none';
 
+    document.getElementById('k_type').textContent = fmtTxt(s.key_type);
+    document.getElementById('k_fp').textContent = fmtTxt(s.key_fingerprint);
+    document.getElementById('k_src').textContent = fmtTxt(s.key_source);
+    const pub = document.getElementById('k_pub');
+    if (document.activeElement !== pub) pub.value = s.public_key || '';
+
     const busy = !!s.busy;
     document.getElementById('b_pull').disabled = busy;
     document.getElementById('b_push').disabled = busy;
   } catch(e){ /* ignore transient errors */ }
+}
+
+function copyKey(){
+  const pub = document.getElementById('k_pub');
+  if (!pub.value){ toast('No key yet'); return; }
+  navigator.clipboard.writeText(pub.value).then(
+    ()=> toast('Public key copied'),
+    ()=> { pub.select(); document.execCommand('copy'); toast('Public key copied'); }
+  );
+}
+function connectRepo(){ act('connect'); }
+async function genKey(){
+  if (!confirm('Regenerate the SSH key? You must add the NEW public key to your '
+      + 'repository before sync will work again.')) return;
+  const type = document.getElementById('k_newtype').value;
+  const comment = document.getElementById('k_newname').value;
+  toast('Generating key…');
+  try {
+    await fetch('./api/genkey', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({type:type, comment:comment})});
+  } catch(e){ toast('Request failed'); }
+  setTimeout(()=>{ refresh(); refreshLog(); }, 800);
 }
 function fmtTxt(v){ return v ? v : '—'; }
 function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
@@ -223,6 +282,11 @@ def make_handler(gs):
                 background(gs.resolve, payload.get("action", ""))
             elif path.endswith("/api/resume"):
                 gs.resume()
+            elif path.endswith("/api/connect"):
+                background(gs.connect)
+            elif path.endswith("/api/genkey"):
+                background(gs.generate_key,
+                          payload.get("type"), payload.get("comment"))
             else:
                 self._send(404, json.dumps({"error": "not found"}))
                 return

@@ -20,11 +20,14 @@ def main():
     log.info("Git Sync starting (branch '%s')", cfg.branch)
 
     gs = GitSync(cfg)
+    # Always prepare the SSH key first so the public key shows in the panel,
+    # even if the repository can't be reached yet (deploy key not added).
     try:
-        gs.ensure_repo()
-    except Exception as err:  # noqa: BLE001 - keep the UI up to report the problem
+        gs.prepare_ssh()
+    except Exception as err:  # noqa: BLE001
         gs.state["last_error"] = str(err)
-        log.error("Initialisation failed: %s", err)
+        log.error("SSH setup failed: %s", err)
+    gs.connect()
 
     if cfg.auto_push:
         Watcher(gs, cfg).start()
