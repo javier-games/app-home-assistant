@@ -1,0 +1,63 @@
+name: Release
+
+# Runs semantic-release for every app in the repo on each push to main.
+# semantic-release-monorepo scopes each run to commits that changed files in
+# that app's directory, so an app is only versioned/released when one of its
+# own files actually changed. Versions are independent per app and tagged as
+# "<app>-vX.Y.Z" (e.g. git-sync-v1.2.0).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two releases at once — they push commits back to main.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # create tags/releases and push the version bump commit
+  issues: write         # semantic-release comments on released issues
+  pull-requests: write  # ...and on released pull requests
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history + tags are required by semantic-release
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install release tooling
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Release changed apps
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          # Every app is a directory one level down that contains a config.yaml.
+          mapfile -t configs < <(
+            find . -mindepth 2 -maxdepth 2 -name config.yaml \
+              -not -path './node_modules/*' | sort
+          )
+          if [ ${#configs[@]} -eq 0 ]; then
+            echo "No apps found (no */config.yaml)."; exit 0
+          fi
+          for cfg in "${configs[@]}"; do
+            app="$(dirname "$cfg")"
+            echo "::group::semantic-release for ${app#./}"
+            ( cd "$app" && npx --no-install semantic-release )
+            echo "::endgroup::"
+          done

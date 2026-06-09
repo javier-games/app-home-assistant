@@ -1,0 +1,29 @@
+{
+  "branches": ["main"],
+  "extends": "semantic-release-monorepo",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md",
+        "changelogTitle": "# Changelog"
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "sed -i -E 's/^version:.*/version: \"${nextRelease.version}\"/' config.yaml"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["config.yaml", "CHANGELOG.md"],
+        "message": "chore(release): ${nextRelease.gitTag} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}
