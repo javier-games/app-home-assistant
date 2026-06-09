@@ -6,11 +6,11 @@ pull remote changes back down on a schedule. Includes a panel with manual
 
 ## How it works
 
-- **Auto push (backup on change):** the add-on watches the backup directory with
+- **Auto push (backup on change):** the app watches the backup directory with
   `inotify`. When files change it waits for a short quiet period
   (`push_debounce`), then commits and pushes — so a burst of edits becomes one
   backup commit.
-- **Auto pull (routine):** every `pull_interval` seconds the add-on fetches the
+- **Auto pull (routine):** every `pull_interval` seconds the app fetches the
   remote. If the remote branch is ahead, it pulls (merging in the new commits).
 - **Manual:** the panel always has **Pull now** and **Push now** buttons.
 
@@ -31,7 +31,7 @@ ssh-keygen -t ed25519 -f ha-backup-key -N "" -C "home-assistant"
 
 - Add the **public** key (`ha-backup-key.pub`) to the repository as a deploy key
   with **write access**.
-- Paste the **private** key (`ha-backup-key`) into the add-on `ssh_key` option,
+- Paste the **private** key (`ha-backup-key`) into the app `ssh_key` option,
   one list entry per line, including the
   `-----BEGIN ...-----` / `-----END ...-----` lines. For example:
 
@@ -48,7 +48,7 @@ ssh_key:
 
 ### 3. Configure and start
 
-Set at least `repository_url` and `branch`, then start the add-on and open the
+Set at least `repository_url` and `branch`, then start the app and open the
 **Git Sync** panel from the sidebar.
 
 ## Options
@@ -86,7 +86,7 @@ them backed up (be careful with `secrets.yaml`).
 ## First-run divergence guard
 
 If the backup directory is **not** yet a git repo but the remote branch
-**already** contains a backup, the add-on links to that history without touching
+**already** contains a backup, the app links to that history without touching
 your files. If your local config differs from the remote, automatic sync
 **pauses** and the panel shows two choices:
 

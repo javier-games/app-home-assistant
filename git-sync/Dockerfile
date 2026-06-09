@@ -15,7 +15,7 @@ RUN apk add --no-cache \
     python3 \
     tzdata
 
-# Copy add-on files (run.sh + python app) into the image.
+# Copy app files (run.sh + python app) into the image.
 COPY rootfs /
 RUN chmod a+x /run.sh
 

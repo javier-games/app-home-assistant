@@ -1,12 +1,12 @@
 #!/usr/bin/with-contenv bashio
 # ==============================================================================
-# Git Sync add-on entrypoint
+# Git Sync app entrypoint
 # Reads its configuration directly from /data/options.json (in Python) so this
 # launcher stays tiny: it just sets the timezone and hands off to the app.
 # ==============================================================================
 set -e
 
-bashio::log.info "Starting the Git Sync add-on..."
+bashio::log.info "Starting the Git Sync app..."
 
 # Apply the Home Assistant configured timezone if available, so commit
 # timestamps and the scheduler line up with the user's expectations.

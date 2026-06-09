@@ -15,7 +15,7 @@ log = logging.getLogger("git")
 
 SSH_KEY_FILE = "/data/id_rsa"
 KNOWN_HOSTS_FILE = "/data/known_hosts"
-GITIGNORE_HEADER = "# === Managed by the Git Sync add-on — do not edit this block ==="
+GITIGNORE_HEADER = "# === Managed by the Git Sync app — do not edit this block ==="
 GITIGNORE_FOOTER = "# === End of Git Sync managed block ==="
 
 
@@ -230,7 +230,7 @@ class GitSync:
         with self.lock:
             if not self.cfg.repository_url:
                 raise RuntimeError(
-                    "No repository_url configured. Set it in the add-on options."
+                    "No repository_url configured. Set it in the app options."
                 )
             os.makedirs(self.repo, exist_ok=True)
             self._setup_ssh()

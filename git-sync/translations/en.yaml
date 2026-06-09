@@ -55,4 +55,4 @@ configuration:
     description: Paths to never back up (gitignore syntax). Secrets and databases by default.
   log_level:
     name: Log level
-    description: Verbosity of the add-on log.
+    description: Verbosity of the app log.

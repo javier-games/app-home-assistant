@@ -1,8 +1,8 @@
-# Home Assistant Add-ons by Javier Games
+# Home Assistant Apps by Javier García
 
-Home Assistant add-on repository.
+Home Assistant app repository.
 
-## Add-ons
+## Apps
 
 ### [Git Sync](./git-sync)
 
@@ -12,7 +12,7 @@ pull/push buttons in the panel.
 
 ## Installation
 
-1. In Home Assistant go to **Settings → Add-ons → Add-on Store**.
+1. In Home Assistant go to **Settings → Apps → App Store**.
 2. Open the ⋮ menu (top right) → **Repositories**.
 3. Add this repository URL:
 
@@ -20,5 +20,9 @@ pull/push buttons in the panel.
    https://github.com/javier-games/app-git-sync
    ```
 
-4. The **Git Sync** add-on will appear in the store. Install it, configure the
-   options (see the add-on docs), and start it.
+4. The **Git Sync** app will appear in the store. Install it, configure the
+   options (see the app docs), and start it.
+
+## License
+
+Released under the [MIT License](./LICENSE).

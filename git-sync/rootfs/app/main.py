@@ -1,4 +1,4 @@
-"""Git Sync add-on orchestrator.
+"""Git Sync app orchestrator.
 
 Wires together the git engine, the local file watcher (auto-push), the pull
 scheduler and the ingress web UI.

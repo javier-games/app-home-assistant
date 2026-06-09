@@ -1,4 +1,4 @@
-"""Load add-on options from /data/options.json (written by the Supervisor)."""
+"""Load app options from /data/options.json (written by the Supervisor)."""
 import json
 import logging
 import os

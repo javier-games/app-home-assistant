@@ -1,8 +1,8 @@
-# Git Sync add-on
+# Git Sync app
 
 Back up your Home Assistant configuration to a Git repository on every local
 change, and pull remote updates automatically on a schedule. Manual **Pull** /
-**Push** buttons are available in the add-on panel.
+**Push** buttons are available in the app panel.
 
 See [DOCS.md](DOCS.md) for full setup and configuration details.
 
