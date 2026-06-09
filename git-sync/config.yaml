@@ -4,7 +4,7 @@ slug: git_sync
 description: >-
   Back up your Home Assistant configuration to a Git repository on every local
   change, and automatically pull remote updates on a schedule.
-url: https://github.com/javier-games/app-git-sync/tree/main/git-sync
+url: https://github.com/javier-games/app-home-assistant/tree/main/git-sync
 codenotary: ""
 arch:
   - aarch64

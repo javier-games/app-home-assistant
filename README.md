@@ -17,7 +17,7 @@ pull/push buttons in the panel.
 3. Add this repository URL:
 
    ```
-   https://github.com/javier-games/app-git-sync
+   https://github.com/javier-games/app-home-assistant
    ```
 
 4. The **Git Sync** app will appear in the store. Install it, configure the

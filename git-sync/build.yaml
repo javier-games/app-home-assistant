@@ -6,4 +6,4 @@ build_from:
   i386: ghcr.io/home-assistant/i386-base:3.19
 labels:
   org.opencontainers.image.title: Git Sync
-  org.opencontainers.image.source: https://github.com/javier-games/app-git-sync
+  org.opencontainers.image.source: https://github.com/javier-games/app-home-assistant
