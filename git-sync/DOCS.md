@@ -85,19 +85,40 @@ The defaults exclude `secrets.yaml`, databases, logs, `.storage/`, `backups/`
 and similar volatile or sensitive files. Remove items from `exclude` if you want
 them backed up (be careful with `secrets.yaml`).
 
+## Repository layout: where backups go
+
+The app mirrors your whole config to the **root of the chosen branch**. Two
+clean layouts:
+
+**A. Separate branch for backups (recommended).** Keep `main` for the repo's
+presentation (`README`, `LICENSE`) and push backups to a dedicated **orphan**
+branch (unrelated history), e.g. `backup`. Set `branch: backup` in the options.
+If the branch doesn't exist yet, the app **creates it as an orphan on the first
+push** — so you don't have to create it manually. To create it explicitly first:
+
+```bash
+git clone git@github.com:youruser/your-backup-repo.git
+cd your-backup-repo
+git checkout --orphan backup
+git rm -rf . 2>/dev/null || true
+git commit --allow-empty -m "Initialize backup branch"
+git push origin backup
+```
+
+Then add the app's deploy key (write access) and set `branch: backup`.
+
+**B. Everything on `main`.** Point the app at `branch: main` and keep your
+`README`/`LICENSE` there too — see *Keeping README / LICENSE* below.
+
 ### Keeping README / LICENSE in the backup repo
 
-The app mirrors your whole config to the **root of the branch**, so any file the
-remote has that your config dir doesn't would normally be deleted on the next
-push. To keep presentation files (so a dedicated backup repo can still have a
-nice `README.md` and `LICENSE` on `main`), list them in `keep_remote_files`
-(defaults: `README.md`, `LICENSE`, `LICENSE.md`, `.github`). These are restored
-from the remote on every commit instead of being deleted — they end up living in
-your config dir as well, which Home Assistant simply ignores.
-
-This is what makes a **dedicated backup repo on `main`** work cleanly: keep your
-LICENSE and README on `main`, point the app at `branch: main`, and your config
-is backed up alongside them.
+When the backup branch **also** holds presentation files (layout B, or anything
+the remote has that your config dir doesn't), they would normally be deleted on
+the next push. List them in `keep_remote_files` (defaults: `README.md`,
+`LICENSE`, `LICENSE.md`, `.github`) and they're restored from the remote on every
+commit instead — they end up living in your config dir too, which Home Assistant
+simply ignores. With layout A this rarely matters, since the `backup` branch
+only holds your config.
 
 ## First-run divergence guard
 
