@@ -81,9 +81,10 @@ backup directory.
 - If you set `include`, it becomes a **whitelist**: only matching paths are
   tracked. `exclude` patterns always take precedence over includes.
 
-The defaults exclude `secrets.yaml`, databases, logs, `.storage/`, `backups/`
-and similar volatile or sensitive files. Remove items from `exclude` if you want
-them backed up (be careful with `secrets.yaml`).
+The defaults exclude `secrets.yaml`, databases, logs, `.storage/`, `.cache/`,
+`__pycache__/`, `deps/`, `backups/` and similar volatile, regenerable or
+sensitive files. Remove items from `exclude` if you want them backed up (be
+careful with `secrets.yaml`).
 
 ## Repository layout: where backups go
 
