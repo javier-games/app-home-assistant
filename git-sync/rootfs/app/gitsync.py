@@ -117,13 +117,18 @@ class GitSync:
         else:
             # Nothing supplied: generate a managed key so there is a public key
             # to copy into the Git host as a deploy key.
-            self._generate_keypair(
-                MANAGED_KEY_FILE,
-                self.cfg.ssh_key_type,
-                self.cfg.ssh_key_comment,
-            )
-            key_path, source = MANAGED_KEY_FILE, "generated"
-            log.info("No SSH key supplied — generated a managed key")
+            try:
+                self._generate_keypair(
+                    MANAGED_KEY_FILE,
+                    self.cfg.ssh_key_type,
+                    self.cfg.ssh_key_comment,
+                )
+                key_path, source = MANAGED_KEY_FILE, "generated"
+                self.state["last_error"] = None
+                log.info("No SSH key supplied — generated a managed key")
+            except Exception as err:  # noqa: BLE001 - surface to the panel, keep UI up
+                self.state["last_error"] = str(err)
+                log.error("Could not generate an SSH key: %s", err)
 
         opts = [
             "-o", "StrictHostKeyChecking=accept-new",
@@ -158,7 +163,13 @@ class GitSync:
         if key_type == "rsa":
             cmd = ["ssh-keygen", "-t", "rsa", "-b", "4096",
                    "-C", comment, "-N", "", "-f", path]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise RuntimeError(
+                "ssh-keygen is not available in the container; cannot generate "
+                "an SSH key. Paste a key into the 'ssh_key' option instead."
+            )
         if result.returncode != 0:
             raise RuntimeError(
                 "ssh-keygen failed: %s" % (result.stderr.strip() or result.stdout.strip())
@@ -174,16 +185,22 @@ class GitSync:
                     return handle.read().strip()
         except OSError:
             pass
-        result = subprocess.run(
-            ["ssh-keygen", "-y", "-f", key_path], capture_output=True, text=True
-        )
+        try:
+            result = subprocess.run(
+                ["ssh-keygen", "-y", "-f", key_path], capture_output=True, text=True
+            )
+        except FileNotFoundError:
+            return ""
         return result.stdout.strip() if result.returncode == 0 else ""
 
     def _key_meta(self, key_path):
         target = key_path + ".pub" if os.path.exists(key_path + ".pub") else key_path
-        result = subprocess.run(
-            ["ssh-keygen", "-l", "-f", target], capture_output=True, text=True
-        )
+        try:
+            result = subprocess.run(
+                ["ssh-keygen", "-l", "-f", target], capture_output=True, text=True
+            )
+        except FileNotFoundError:
+            return ("", "")
         if result.returncode != 0:
             return ("", "")
         line = result.stdout.strip()      # e.g. "256 SHA256:abc comment (ED25519)"
