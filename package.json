@@ -5,11 +5,11 @@
   "description": "Release tooling for the Home Assistant apps in this repository",
   "license": "MIT",
   "devDependencies": {
-    "semantic-release": "^21.1.2",
+    "semantic-release": "^19.0.5",
     "semantic-release-monorepo": "^7.0.5",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^9.2.6"
+    "@semantic-release/github": "^8.1.0"
   }
 }

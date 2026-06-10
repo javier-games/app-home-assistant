@@ -36,7 +36,9 @@ jobs:
           node-version: 20
 
       - name: Install release tooling
-        run: npm install --no-package-lock --no-audit --no-fund
+        # --legacy-peer-deps: semantic-release-monorepo declares a conservative
+        # peer range; the pinned versions are compatible at runtime.
+        run: npm install --no-package-lock --no-audit --no-fund --legacy-peer-deps
 
       - name: Release changed apps
         env:
