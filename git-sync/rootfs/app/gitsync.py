@@ -468,7 +468,8 @@ class GitSync:
         resolved from the panel — and returns False.
         """
         result = self._git(
-            "merge", "--no-edit", "origin/%s" % self.cfg.branch, check=False
+            "merge", "--no-edit", "--allow-unrelated-histories",
+            "origin/%s" % self.cfg.branch, check=False
         )
         if result.returncode == 0:
             return True
@@ -498,6 +499,27 @@ class GitSync:
             "diff", "--name-only", "--diff-filter=U", check=False
         )
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+    def _restore_protected_from_remote(self):
+        """After a 'keep local' resolution (which replaces the whole tree),
+        bring back protected repo-meta files (README, LICENSE, …) from the
+        remote so they are not dropped."""
+        patterns = [p.strip() for p in (self.cfg.keep_remote_files or []) if p and p.strip()]
+        if not patterns:
+            return
+        restored = False
+        for pattern in patterns:
+            result = self._git(
+                "checkout", "origin/%s" % self.cfg.branch, "--", pattern, check=False
+            )
+            if result.returncode == 0:
+                restored = True
+        if restored:
+            self._git("add", "-A")
+            if self._local_changes():
+                self._git("commit", "--no-edit", "-m",
+                          "Restore repo files after keeping local version")
+                log.info("Restored protected repo files from the remote")
 
     def push(self, message=None, auto=False):
         with self.lock:
@@ -614,7 +636,9 @@ class GitSync:
                 if strategy == "local":
                     log.info("Resolving conflict: keeping local (local wins)")
                     self._git("merge", "-s", "ours", "--no-edit",
+                              "--allow-unrelated-histories",
                               "origin/%s" % self.cfg.branch)
+                    self._restore_protected_from_remote()
                     self._git("push", "-u", "origin", self.cfg.branch)
                 elif strategy == "remote":
                     log.info("Resolving conflict: using remote (remote wins)")
