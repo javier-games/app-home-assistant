@@ -137,9 +137,11 @@ Pick one to clear the pause and resume automatic sync.
 
 ## Notes & limitations
 
-- Merge conflicts during an automatic pull are not auto-resolved: the merge is
-  aborted and the error is shown in the panel. Resolve manually (conflicts are
-  rare for single-instance backups).
+- Merge conflicts (when the same lines changed locally and remotely) pause sync
+  and show a **Merge conflict** card in the panel listing the affected files,
+  with two one-click resolutions: **Keep my version (local wins)** or **Use
+  remote version (remote wins)**. While a conflict is pending, automatic push
+  and pull are held so nothing is committed with conflict markers.
 - `secrets.yaml` is excluded by default. Think twice before backing up secrets
   to a remote, even a private one.
 - Large `.storage`/database files are excluded to keep the repo small and avoid

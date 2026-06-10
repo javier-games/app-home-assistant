@@ -48,6 +48,8 @@ class GitSync:
             "key_type": "",
             "key_source": "",      # provided | file | generated | none
             "key_fingerprint": "",
+            "conflict": False,
+            "conflict_files": [],
         }
 
     # ------------------------------------------------------------------ #
@@ -459,18 +461,50 @@ class GitSync:
         return True
 
     def _merge_remote(self):
+        """Merge origin/<branch> into the working tree.
+
+        Returns True on a clean merge. On a conflict, leaves the conflicted
+        merge in place, records it in the state and pauses — so it can be
+        resolved from the panel — and returns False.
+        """
         result = self._git(
             "merge", "--no-edit", "origin/%s" % self.cfg.branch, check=False
         )
-        if result.returncode != 0:
-            self._git("merge", "--abort", check=False)
-            raise RuntimeError(
-                "Merge conflict with the remote branch; manual resolution required"
+        if result.returncode == 0:
+            return True
+
+        files = self._conflicted_files()
+        if files:
+            self.state["conflict"] = True
+            self.state["conflict_files"] = files
+            self._pause(
+                "Merge conflict while syncing. Resolve it from the panel: "
+                "keep your local version, or use the remote version."
             )
+            self.state["last_error"] = "Merge conflict in %d file(s): %s" % (
+                len(files), ", ".join(files[:5]) + ("…" if len(files) > 5 else "")
+            )
+            log.warning("Merge conflict in: %s", ", ".join(files))
+            return False
+
+        # A non-conflict merge failure: clean up and report.
+        self._git("merge", "--abort", check=False)
+        raise RuntimeError(
+            "Merge failed: %s" % (result.stderr.strip() or "unknown error")
+        )
+
+    def _conflicted_files(self):
+        result = self._git(
+            "diff", "--name-only", "--diff-filter=U", check=False
+        )
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     def push(self, message=None, auto=False):
         with self.lock:
             if not self.state["initialized"]:
+                return
+            if self.state["conflict"]:
+                log.debug("Push skipped (unresolved merge conflict)")
                 return
             if auto and self.state["paused"]:
                 log.debug("Auto-push skipped (paused)")
@@ -486,7 +520,8 @@ class GitSync:
                 if self.state["behind"] > 0:
                     log.info("Remote advanced by %d commit(s); merging first",
                              self.state["behind"])
-                    self._merge_remote()
+                    if not self._merge_remote():
+                        return  # conflict — wait for resolution from the panel
                 self._git("push", "-u", "origin", self.cfg.branch)
                 self.state["last_push"] = _now()
                 self.state["last_error"] = None
@@ -501,6 +536,9 @@ class GitSync:
     def pull(self, auto=False):
         with self.lock:
             if not self.state["initialized"]:
+                return
+            if self.state["conflict"]:
+                log.debug("Pull skipped (unresolved merge conflict)")
                 return
             if auto and self.state["paused"]:
                 log.debug("Auto-pull skipped (paused)")
@@ -519,7 +557,8 @@ class GitSync:
                 if self.state["dirty"]:
                     # Preserve local edits as a commit before merging.
                     self._commit("Local backup before pull {timestamp}")
-                self._merge_remote()
+                if not self._merge_remote():
+                    return  # conflict — wait for resolution from the panel
                 self.state["last_pull"] = _now()
                 self.state["last_error"] = None
                 log.info("Pulled latest changes from origin/%s", self.cfg.branch)
@@ -553,6 +592,46 @@ class GitSync:
             except Exception as err:  # noqa: BLE001
                 self.state["last_error"] = str(err)
                 log.error("Resolve (%s) failed: %s", action, err)
+            finally:
+                self._refresh()
+                self.state["busy"] = ""
+
+    def resolve_conflict(self, strategy):
+        """Resolve a merge conflict from the panel.
+
+        strategy:
+          'local'  -> keep the local version (local wins), remote history is
+                      still recorded via an 'ours' merge.
+          'remote' -> discard local changes and take the remote version.
+        """
+        with self.lock:
+            if not self.state["conflict"]:
+                return
+            self.state["busy"] = "resolve"
+            try:
+                # Always start from a clean state.
+                self._git("merge", "--abort", check=False)
+                if strategy == "local":
+                    log.info("Resolving conflict: keeping local (local wins)")
+                    self._git("merge", "-s", "ours", "--no-edit",
+                              "origin/%s" % self.cfg.branch)
+                    self._git("push", "-u", "origin", self.cfg.branch)
+                elif strategy == "remote":
+                    log.info("Resolving conflict: using remote (remote wins)")
+                    self._git("fetch", "origin", self.cfg.branch)
+                    self._git("reset", "--hard", "origin/%s" % self.cfg.branch)
+                    self._git("clean", "-fd", check=False)
+                    self._write_gitignore()
+                else:
+                    raise RuntimeError("Unknown conflict strategy: %r" % strategy)
+                self.state["conflict"] = False
+                self.state["conflict_files"] = []
+                self.state["last_error"] = None
+                self.resume()
+                log.info("Merge conflict resolved (%s)", strategy)
+            except Exception as err:  # noqa: BLE001
+                self.state["last_error"] = str(err)
+                log.error("Conflict resolution (%s) failed: %s", strategy, err)
             finally:
                 self._refresh()
                 self.state["busy"] = ""

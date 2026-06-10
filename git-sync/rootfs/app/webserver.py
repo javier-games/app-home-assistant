@@ -67,6 +67,19 @@ PAGE = """<!DOCTYPE html>
     </div>
   </div>
 
+  <div id="conflict" class="card" style="display:none">
+    <div class="banner" id="conflictText"></div>
+    <div style="font-size:13px;margin:0 0 10px">
+      <b>Conflicting files:</b>
+      <div id="conflictFiles" style="font-family:ui-monospace,Menlo,monospace;
+        font-size:12px;margin-top:6px;white-space:pre-wrap"></div>
+    </div>
+    <div class="row">
+      <button class="danger" onclick="resolveConflict('local')">&#11014; Keep my version (local wins)</button>
+      <button class="secondary" onclick="resolveConflict('remote')">&#11015; Use remote version (remote wins)</button>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Status</h2>
     <div class="grid">
@@ -157,8 +170,15 @@ async function refresh(){
     const errEl = document.getElementById('s_err');
     errEl.innerHTML = s.last_error ? pill('err', escapeHtml(s.last_error)) : '&mdash;';
 
+    const cf = document.getElementById('conflict');
+    if (s.conflict){ cf.style.display='block';
+      document.getElementById('conflictText').textContent = s.pause_reason;
+      document.getElementById('conflictFiles').textContent =
+        (s.conflict_files||[]).join('\\n') || '(none reported)'; }
+    else cf.style.display='none';
+
     const rv = document.getElementById('resolve');
-    if (s.paused){ rv.style.display='block';
+    if (s.paused && !s.conflict){ rv.style.display='block';
       document.getElementById('resolveText').textContent = s.pause_reason; }
     else rv.style.display='none';
 
@@ -183,6 +203,19 @@ function copyKey(){
   );
 }
 function connectRepo(){ act('connect'); }
+async function resolveConflict(strategy){
+  const msg = strategy === 'local'
+    ? 'Keep your LOCAL version and overwrite the remote?'
+    : 'Discard local changes and take the REMOTE version?';
+  if (!confirm(msg)) return;
+  toast('Resolving conflict: ' + strategy + '…');
+  try {
+    await fetch('./api/conflict', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({strategy:strategy})});
+  } catch(e){ toast('Request failed'); }
+  setTimeout(()=>{ refresh(); refreshLog(); }, 700);
+}
 async function genKey(){
   if (!confirm('Regenerate the SSH key? You must add the NEW public key to your '
       + 'repository before sync will work again.')) return;
@@ -280,6 +313,8 @@ def make_handler(gs):
                 background(gs.push, payload.get("message"))
             elif path.endswith("/api/resolve"):
                 background(gs.resolve, payload.get("action", ""))
+            elif path.endswith("/api/conflict"):
+                background(gs.resolve_conflict, payload.get("strategy", ""))
             elif path.endswith("/api/resume"):
                 gs.resume()
             elif path.endswith("/api/connect"):
