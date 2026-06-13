@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Node / semantic-release tooling
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
