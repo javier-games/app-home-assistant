@@ -1,0 +1,74 @@
+configuration:
+  repository_url:
+    name: Repository URL
+    description: >-
+      The Git repository used for backups. Use an SSH URL such as
+      git@github.com:owner/repo.git together with an SSH key, or an HTTPS URL.
+  branch:
+    name: Branch
+    description: Branch to pull from and push to (created automatically if missing).
+  ssh_key:
+    name: SSH private key
+    description: >-
+      The private deploy key, one list entry per line of the key (including the
+      BEGIN/END lines). Leave empty when using HTTPS or an ssh_key_path.
+  ssh_key_path:
+    name: SSH key file path
+    description: >-
+      Optional path to an existing private key (e.g. /ssl/git_id_rsa) to use
+      instead of pasting the key above.
+  ssh_key_type:
+    name: Generated key type
+    description: >-
+      Algorithm used when the app generates its own key (ed25519 recommended).
+      Only used when no key is pasted or provided via a file.
+  ssh_key_comment:
+    name: Generated key name
+    description: >-
+      Comment/name attached to the generated key, shown next to it in your Git
+      host. Useful to identify the deploy key.
+  keep_remote_files:
+    name: Keep remote files
+    description: >-
+      Repo files that live alongside the backup (e.g. README.md, LICENSE,
+      .github) and must never be deleted by the mirror. They are restored from
+      the remote on each commit.
+  backup_path:
+    name: Backup directory
+    description: >-
+      Directory to keep in sync. Defaults to /homeassistant (your configuration
+      folder).
+  auto_pull:
+    name: Enable automatic pull
+    description: Periodically check the remote and pull when it is ahead.
+  pull_interval:
+    name: Pull interval (seconds)
+    description: How often to check the remote for new commits.
+  auto_push:
+    name: Enable automatic push
+    description: Commit and push automatically whenever local files change.
+  push_debounce:
+    name: Push debounce (seconds)
+    description: >-
+      Wait this long after the last change before pushing, so bursts of edits
+      are grouped into a single backup commit.
+  commit_message:
+    name: Commit message
+    description: Template for automatic commits. {timestamp} is replaced with the date and time.
+  commit_author_name:
+    name: Commit author name
+    description: Name recorded on backup commits.
+  commit_author_email:
+    name: Commit author email
+    description: Email recorded on backup commits.
+  include:
+    name: Include patterns
+    description: >-
+      Optional whitelist. When set, only matching paths are tracked (gitignore
+      syntax). Leave empty to track everything except the excludes.
+  exclude:
+    name: Exclude patterns
+    description: Paths to never back up (gitignore syntax). Secrets and databases by default.
+  log_level:
+    name: Log level
+    description: Verbosity of the app log.
