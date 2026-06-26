@@ -136,6 +136,26 @@ PAGE = """<!DOCTYPE html>
   </div>
 
   <div class="card">
+    <h2>Backup filters (.gitignore)</h2>
+    <p style="font-size:13px;opacity:.75;margin:0 0 8px">
+      Files matching these patterns are <b>not</b> backed up. This file is yours —
+      the app seeds it once and only changes it when you save here.
+    </p>
+    <div class="row" style="margin-bottom:8px;align-items:center">
+      <input id="gi_add" placeholder="add a pattern, e.g. *.bak or media/"
+        onkeydown="if(event.key==='Enter')addPattern()"
+        style="padding:8px;border-radius:8px;border:1px solid #ccc;flex:1;min-width:180px">
+      <button class="secondary" onclick="addPattern()">&#10133; Add</button>
+    </div>
+    <textarea id="gi_text" rows="10" spellcheck="false" style="width:100%;box-sizing:border-box;
+      font-family:ui-monospace,Menlo,monospace;font-size:12px;border-radius:8px;padding:8px"></textarea>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <button onclick="saveGitignore()">&#128190; Save .gitignore</button>
+      <button class="secondary" onclick="loadGitignore()">&#8635; Reload</button>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Recent log</h2>
     <div class="log" id="log">loading&hellip;</div>
   </div>
@@ -240,6 +260,34 @@ async function refreshLog(){
     el.scrollTop = el.scrollHeight;
   } catch(e){}
 }
+async function loadGitignore(){
+  try {
+    const d = await (await fetch('./api/gitignore', {cache:'no-store'})).json();
+    const ta = document.getElementById('gi_text');
+    if (document.activeElement !== ta) ta.value = d.content || '';
+  } catch(e){}
+}
+function addPattern(){
+  const inp = document.getElementById('gi_add');
+  const ta = document.getElementById('gi_text');
+  const p = inp.value.trim();
+  if (!p) return;
+  if (ta.value && !ta.value.endsWith('\\n')) ta.value += '\\n';
+  ta.value += p + '\\n';
+  inp.value = '';
+  ta.scrollTop = ta.scrollHeight;
+}
+async function saveGitignore(){
+  const content = document.getElementById('gi_text').value;
+  toast('Saving .gitignore…');
+  try {
+    await fetch('./api/gitignore', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({content:content})});
+    toast('.gitignore saved');
+  } catch(e){ toast('Request failed'); }
+  setTimeout(()=>{ loadGitignore(); refresh(); refreshLog(); }, 500);
+}
 async function act(name, action){
   toast(action ? (name+': '+action) : (name+'…'));
   try {
@@ -255,7 +303,7 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=> t.classList.remove('show'), 2500);
 }
-refresh(); refreshLog();
+refresh(); refreshLog(); loadGitignore();
 setInterval(refresh, 3000);
 setInterval(refreshLog, 4000);
 </script>
@@ -292,6 +340,8 @@ def make_handler(gs):
                 self._send(200, json.dumps(gs.status()))
             elif path.endswith("/api/log"):
                 self._send(200, json.dumps({"lines": list(RING)}))
+            elif path.endswith("/api/gitignore"):
+                self._send(200, json.dumps({"content": gs.read_gitignore()}))
             else:
                 self._send(404, json.dumps({"error": "not found"}))
 
@@ -322,6 +372,8 @@ def make_handler(gs):
             elif path.endswith("/api/genkey"):
                 background(gs.generate_key,
                           payload.get("type"), payload.get("comment"))
+            elif path.endswith("/api/gitignore"):
+                gs.save_gitignore(payload.get("content", ""))
             else:
                 self._send(404, json.dumps({"error": "not found"}))
                 return

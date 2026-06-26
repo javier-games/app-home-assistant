@@ -17,8 +17,8 @@ SSH_DIR = "/data"
 KNOWN_HOSTS_FILE = "/data/known_hosts"
 PROVIDED_KEY_FILE = "/data/id_provided"   # a key pasted into the options
 MANAGED_KEY_FILE = "/data/id_gitsync"     # a key generated/managed by the app
-GITIGNORE_HEADER = "# === Managed by the Git Sync app — do not edit this block ==="
-GITIGNORE_FOOTER = "# === End of Git Sync managed block ==="
+GITIGNORE_HEADER = "# Git Sync backup filters — edit this file freely."
+GITIGNORE_FOOTER = "# (Seeded from the add-on options on first run; the app does not overwrite your edits.)"
 
 
 def _now():
@@ -278,19 +278,45 @@ class GitSync:
         lines.append(GITIGNORE_FOOTER)
         return "\n".join(lines) + "\n"
 
-    def _write_gitignore(self):
-        target = os.path.join(self.repo, ".gitignore")
-        desired = self._gitignore_content()
+    def _ensure_gitignore(self):
+        """Seed a .gitignore only when none exists — never overwrite the user's.
+
+        The .gitignore is user-owned. The app writes it only on first
+        initialisation (when missing) or when explicitly saved from the panel.
+        """
+        path = os.path.join(self.repo, ".gitignore")
+        if os.path.exists(path):
+            return
+        # Prefer a .gitignore committed in HEAD over seeding a fresh default.
+        if self._git("rev-parse", "--verify", "HEAD", check=False).returncode == 0:
+            self._git("checkout", "HEAD", "--", ".gitignore", check=False)
+            if os.path.exists(path):
+                return
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(self._gitignore_content())
+        log.info("Seeded a default .gitignore (none existed)")
+
+    def read_gitignore(self):
+        """Return the current .gitignore content (empty string if none)."""
+        path = os.path.join(self.repo, ".gitignore")
         try:
-            with open(target, "r", encoding="utf-8") as handle:
-                if handle.read() == desired:
-                    return
+            with open(path, "r", encoding="utf-8") as handle:
+                return handle.read()
         except OSError:
-            pass
-        with open(target, "w", encoding="utf-8") as handle:
-            handle.write(desired)
-        log.info("Wrote managed .gitignore (%d include / %d exclude rules)",
-                 len(self.cfg.include or []), len(self.cfg.exclude or []))
+            return ""
+
+    def save_gitignore(self, content):
+        """Write .gitignore from the panel — the only place the app overwrites it."""
+        with self.lock:
+            if content is None:
+                return
+            if not content.endswith("\n"):
+                content += "\n"
+            path = os.path.join(self.repo, ".gitignore")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(content)
+            log.info("Saved .gitignore from the panel (%d bytes)", len(content))
+            self._refresh()
 
     # ------------------------------------------------------------------ #
     # Status helpers
@@ -402,7 +428,6 @@ class GitSync:
 
             self._ensure_remote()
             self._config_repo()
-            self._write_gitignore()
 
             if is_new and self._remote_branch_exists():
                 # Adopt the existing remote history without touching local files.
@@ -427,6 +452,9 @@ class GitSync:
                     "Remote branch '%s' does not exist yet; it will be created "
                     "on the first push", self.cfg.branch,
                 )
+
+            # Seed a .gitignore only if the repo has none (never overwrites).
+            self._ensure_gitignore()
 
             self.state["initialized"] = True
             self._refresh(fetch=not is_new)
@@ -533,7 +561,6 @@ class GitSync:
                 return
             self.state["busy"] = "push"
             try:
-                self._write_gitignore()
                 created = self._commit(message)
                 self._refresh(fetch=True)
                 if not created and self.state["ahead"] == 0:
@@ -601,10 +628,10 @@ class GitSync:
                     self._git("fetch", "origin", self.cfg.branch)
                     self._git("reset", "--hard", "origin/%s" % self.cfg.branch)
                     self._git("clean", "-fd", check=False)
-                    self._write_gitignore()
+                    self._ensure_gitignore()
                 elif action == "push":
                     log.info("Resolving divergence: pushing local over remote")
-                    self._write_gitignore()
+                    self._ensure_gitignore()
                     self._commit("Initial backup {timestamp}")
                     self._git("push", "-u", "origin", self.cfg.branch)
                 else:
@@ -645,7 +672,7 @@ class GitSync:
                     self._git("fetch", "origin", self.cfg.branch)
                     self._git("reset", "--hard", "origin/%s" % self.cfg.branch)
                     self._git("clean", "-fd", check=False)
-                    self._write_gitignore()
+                    self._ensure_gitignore()
                 else:
                     raise RuntimeError("Unknown conflict strategy: %r" % strategy)
                 self.state["conflict"] = False

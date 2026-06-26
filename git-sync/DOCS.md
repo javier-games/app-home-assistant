@@ -68,23 +68,32 @@ Set at least `repository_url` and `branch`, then start the app and open the
 | `push_debounce` | Quiet period (seconds) before an auto push. |
 | `commit_message` | Template; `{timestamp}` is substituted. |
 | `commit_author_name` / `commit_author_email` | Identity for commits. |
-| `include` | Optional whitelist (gitignore syntax). Empty = track everything. |
-| `exclude` | Paths never backed up (gitignore syntax). |
+| `include` | Seed only: optional whitelist used to create `.gitignore` on first run. |
+| `exclude` | Seed only: patterns used to create `.gitignore` on first run. Edit the file afterwards. |
 | `log_level` | `trace`…`fatal`. |
 
-### Include / exclude
+### Backup filters (.gitignore)
 
-These are rendered into a managed block in a `.gitignore` at the root of the
-backup directory.
+What gets backed up is controlled by a standard `.gitignore` at the root of the
+backup directory. **This file is yours to edit** — via the **Backup filters**
+card in the panel, the Home Assistant file editor, or any editor.
 
-- Leave `include` empty to back up everything except the `exclude` list.
-- If you set `include`, it becomes a **whitelist**: only matching paths are
-  tracked. `exclude` patterns always take precedence over includes.
+- The app **seeds** the `.gitignore` from the `include`/`exclude` options **only
+  when none exists** (first run). After that it **never overwrites your edits**.
+- The only time the app writes the file afterwards is when you **save it from the
+  panel** (the *Backup filters* card loads the current file when you open the
+  panel, lets you add patterns, and writes it only on **Save**).
+- So `include`/`exclude` are just the **initial seed** — once a `.gitignore`
+  exists, edit the file directly; changing the options won't touch it.
 
-The defaults exclude `secrets.yaml`, databases, logs, `.storage/`, `.cache/`,
-`__pycache__/`, `deps/`, `backups/` and similar volatile, regenerable or
-sensitive files. Remove items from `exclude` if you want them backed up (be
-careful with `secrets.yaml`).
+The seeded defaults exclude `secrets.yaml`, databases, logs, `.storage/`,
+`.cache/`, `__pycache__/`, `deps/`, `backups/` and similar volatile, regenerable
+or sensitive files.
+
+> Note: `.gitignore` only stops **untracked** files. If you add a pattern for a
+> file that's already in the backup, it won't be removed automatically — delete
+> it once (it'll be committed as a removal) and the ignore keeps it out from then
+> on.
 
 ## Repository layout: where backups go
 

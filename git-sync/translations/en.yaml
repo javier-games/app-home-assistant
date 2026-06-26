@@ -62,13 +62,15 @@ configuration:
     name: Commit author email
     description: Email recorded on backup commits.
   include:
-    name: Include patterns
+    name: Include patterns (seed)
     description: >-
-      Optional whitelist. When set, only matching paths are tracked (gitignore
-      syntax). Leave empty to track everything except the excludes.
+      Used only to seed .gitignore on first run. Optional whitelist — when set,
+      only matching paths are tracked. After first run, edit .gitignore in the panel.
   exclude:
-    name: Exclude patterns
-    description: Paths to never back up (gitignore syntax). Secrets and databases by default.
+    name: Exclude patterns (seed)
+    description: >-
+      Used only to seed .gitignore on first run (secrets and databases by
+      default). After first run, edit .gitignore directly in the panel.
   log_level:
     name: Log level
     description: Verbosity of the app log.
